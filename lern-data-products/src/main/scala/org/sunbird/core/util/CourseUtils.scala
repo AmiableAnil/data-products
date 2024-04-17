@@ -2,7 +2,7 @@ package org.sunbird.core.util
 
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.ekstep.analytics.framework.Level.{ERROR, INFO}
 import org.ekstep.analytics.framework.util.DatasetUtil.extensions
 import org.ekstep.analytics.framework.util.{JSONUtils, JobLogger, MergeUtil, RestUtil}
@@ -10,10 +10,9 @@ import org.ekstep.analytics.framework.{FrameworkContext, MergeConfig, MergeFiles
 import org.ekstep.analytics.model.{OutputConfig, ReportConfig}
 import org.sunbird.cloud.storage.conf.AppConf
 
-import scala.collection.immutable.List
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scala.concurrent.{Future, _}
+import scala.concurrent._
 
 //Getting live courses from compositesearch
 case class CourseDetails(result: Result)
