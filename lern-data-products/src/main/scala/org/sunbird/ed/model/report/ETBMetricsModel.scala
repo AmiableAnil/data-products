@@ -7,9 +7,8 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.ekstep.analytics.framework.util._
 import org.ekstep.analytics.framework._
 import org.ekstep.analytics.model.{OutputConfig, ReportConfig}
-import org.ekstep.analytics.util.Constants
 import org.sunbird.cloud.storage.conf.AppConf
-import org.sunbird.core.util.CourseUtils
+import org.sunbird.core.util.{Constants, CourseUtils}
 import org.sunbird.ed.util.TextBookUtils
 
 
@@ -244,7 +243,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
   }
 
   def getTenantInfo(config: Map[String, AnyRef], restUtil: HTTPClient)(implicit sc: SparkContext):  RDD[TenantInfo] = {
-    val url = Constants.ORG_SEARCH_URL
+    val url = Constants.ORG_PRIVATE_SEARCH_URL
     val tenantConf = config.get("tenantConfig").get.asInstanceOf[Map[String, String]]
     val filters = if(tenantConf.get("tenantId").get.nonEmpty) s"""{"id":"${tenantConf.get("tenantId").get}"}""".stripMargin
     else if(tenantConf.get("slugName").get.nonEmpty) s"""{"slug":"${tenantConf.get("slugName").get}"}""".stripMargin

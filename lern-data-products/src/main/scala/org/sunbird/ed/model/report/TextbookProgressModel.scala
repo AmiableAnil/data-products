@@ -3,12 +3,11 @@ package org.sunbird.ed.model.report
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, Encoders, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.ekstep.analytics.framework._
 import org.ekstep.analytics.framework.util.{CommonUtil, JSONUtils, JobLogger, RestUtil}
 import org.ekstep.analytics.model.ReportConfig
-import org.ekstep.analytics.util.Constants
-import org.sunbird.core.util.{CourseUtils, UnirestUtil}
+import org.sunbird.core.util.{Constants, CourseUtils, UnirestUtil}
 import org.sunbird.ed.util.TextBookUtils
 
 //Tenant Information from cassandra
@@ -27,13 +26,13 @@ case class TBReport(board: String, medium: String, gradeLevel: String, subject: 
 
 object TextbookProgressModel extends IBatchModelTemplate[Empty, TenantInformation, Empty, Empty] with Serializable {
 
-  implicit val className: String = "org.sunbird.analytics.model.TextbookProgressModel"
+  implicit val className: String = "org.sunbird.ed.model.report.TextbookProgressModel"
 
   override def name: String = "TextbookProgressModel"
 
   override def preProcess(events: RDD[Empty], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[TenantInformation] = {
     CommonUtil.setStorageConf(config.getOrElse("store", "local").toString, config.get("accountKey").asInstanceOf[Option[String]], config.get("accountSecret").asInstanceOf[Option[String]])
-    val url = Constants.ORG_SEARCH_URL
+    val url = Constants.ORG_PRIVATE_SEARCH_URL
     val tenantRequest = s"""{
                            |    "params": { },
                            |    "request":{

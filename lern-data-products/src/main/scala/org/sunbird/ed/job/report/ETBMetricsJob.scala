@@ -6,7 +6,7 @@ import org.ekstep.analytics.framework.util.JobLogger
 import org.sunbird.ed.model.report.ETBMetricsModel
 
 object ETBMetricsJob extends IJob {
-  implicit val className = "org.sunbird.analytics.job.report.ETBMetricsJob"
+  implicit val className = "org.sunbird.ed.job.report.ETBMetricsJob"
 
   def main(config: String)(implicit sc: Option[SparkContext] = None, fc: Option[FrameworkContext] = None) {
     implicit val sparkContext: SparkContext = sc.getOrElse(null);
