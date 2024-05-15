@@ -2,6 +2,7 @@ application.env="{{ env }}"
 telemetry.version="2.1"
 default.parallelization="10"
 spark_output_temp_dir="/mount/data/analytics/tmp/"
+lp.url="{{lp_url}}"
 service.search.url="{{ service.search.url }}"
 service.search.path="{{ service.search.path }}"
 spark.cassandra.connection.host="{{groups['dp-cassandra'][0]}}"
@@ -13,8 +14,11 @@ reports.storage.key.config="{{ dp_reports_storage_key_config }}"
 reports.storage.secret.config="{{ dp_reports_storage_secret_config }}"
 cloud_storage_type="{{cloud_service_provider}}"
 
+{% if cloud_service_provider == "oci" %}
+cloud_storage_endpoint="{{ cloud_private_storage_endpoint.split('/')[2]|lower }}"
+{% else %}
 cloud_storage_endpoint="{{ cloud_private_storage_endpoint | regex_replace('^[a-z]+://(.*)$', '\1') }}"
-{# cloud_storage_endpoint="{{ cloud_private_storage_endpoint.split('/')[2]|lower }}" #}
+{% endif %}
 cloud_storage_endpoint_with_protocol="{{ cloud_private_storage_endpoint }}"
 
 # Joblog Kafka appender config for cluster execution
