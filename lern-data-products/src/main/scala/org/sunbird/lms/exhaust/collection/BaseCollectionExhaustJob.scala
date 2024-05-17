@@ -17,7 +17,6 @@ import org.ekstep.analytics.util.Constants
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.joda.time.{DateTime, DateTimeZone}
 import org.sunbird.cloud.storage.conf.AppConf
-import org.sunbird.core.util.{DecryptUtil, RedisConnect}
 import org.sunbird.core.exhaust.{BaseReportsJob, JobRequest, OnDemandExhaustJob}
 import org.sunbird.core.util.{DataSecurityUtil, DecryptUtil, RedisConnect}
 import org.sunbird.lms.exhaust.collection.ResponseExhaustJobV2.Question
