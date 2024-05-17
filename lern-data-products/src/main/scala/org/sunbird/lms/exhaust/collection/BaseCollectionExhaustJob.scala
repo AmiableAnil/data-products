@@ -8,7 +8,7 @@ import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.StructType
 import org.ekstep.analytics.framework.Level.{ERROR, INFO}
-import org.ekstep.analytics.framework.conf.AppConf
+//import org.ekstep.analytics.framework.conf.AppConf
 import org.ekstep.analytics.framework.dispatcher.KafkaDispatcher
 import org.ekstep.analytics.framework.driver.BatchJobDriver.getMetricJson
 import org.ekstep.analytics.framework.util.DatasetUtil.extensions
