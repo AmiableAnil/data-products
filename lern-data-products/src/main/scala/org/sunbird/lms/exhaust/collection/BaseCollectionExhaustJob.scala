@@ -17,6 +17,7 @@ import org.ekstep.analytics.framework.{FrameworkContext, IJob, JobConfig, Storag
 import org.ekstep.analytics.util.Constants
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatter}
 import org.joda.time.{DateTime, DateTimeZone}
+import org.sunbird.cloud.storage.conf.AppConf
 import org.sunbird.core.util.{DecryptUtil, RedisConnect}
 import org.sunbird.core.exhaust.{BaseReportsJob, JobRequest, OnDemandExhaustJob}
 import org.sunbird.core.util.DataSecurityUtil.{getOrgId, getPIIFieldDetails, getSecuredExhaustFile, getSecurityLevel}
@@ -61,6 +62,18 @@ trait BaseCollectionExhaustJob extends BaseReportsJob with IJob with OnDemandExh
     JobLogger.start(s"${jobName()} started executing - ver3", Option(Map("config" -> config, "model" -> jobName)))
 
     implicit val jobConfig = JSONUtils.deserialize[JobConfig](config)
+    val modelParams = jobConfig.modelParams.getOrElse(Map[String, Option[AnyRef]]());
+    val store = modelParams.getOrElse("store", "local").asInstanceOf[String];
+    val storageKeyConfig = modelParams.getOrElse("storageKeyConfig", "").asInstanceOf[String];
+    val storageSecretConfig = modelParams.getOrElse("storageSecretConfig", "").asInstanceOf[String];
+
+    val storageKey = if (storageKeyConfig.nonEmpty) {
+      AppConf.getConfig(storageKeyConfig)
+    } else "reports_storage_key"
+    val storageSecret = if (storageSecretConfig.nonEmpty) {
+      AppConf.getConfig(storageSecretConfig)
+    } else "reports_storage_secret"
+    JobLogger.log("BaseCollectionExhaustJob", Some(Map("storageKey" -> storageKey, "storageSecret" -> storageSecret)), INFO)
     implicit val spark: SparkSession = openSparkSession(jobConfig)
     implicit val frameworkContext: FrameworkContext = getReportingFrameworkContext()
     init()
