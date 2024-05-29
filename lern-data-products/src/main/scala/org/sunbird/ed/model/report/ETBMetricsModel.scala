@@ -4,6 +4,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.ekstep.analytics.framework.Level.INFO
 import org.ekstep.analytics.framework.util._
 import org.ekstep.analytics.framework._
 import org.ekstep.analytics.model.{OutputConfig, ReportConfig}
@@ -51,7 +52,10 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
   override def name: String = "ETBMetricsModel"
 
   override def preProcess(events: RDD[Empty], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[Empty] = {
-    CommonUtil.setStorageConf(config.getOrElse("store", "local").toString, config.get("storageKeyConfig").asInstanceOf[Option[String]], config.get("storageSecretConfig").asInstanceOf[Option[String]])
+    val storageKeyConfig = config.getOrElse("storageKeyConfig", "").asInstanceOf[String];
+    val storageSecretConfig = config.getOrElse("storageSecretConfig", "").asInstanceOf[String];
+    JobLogger.log(s"ETBMetricsModel: preProcess storageKeyConfig: $storageKeyConfig, storageSecretConfig: $storageSecretConfig", None, INFO)
+    CommonUtil.setStorageConf(config.getOrElse("store", "local").toString, Option(AppConf.getConfig(storageKeyConfig)), Option(AppConf.getConfig(storageSecretConfig)))
     sc.emptyRDD
   }
 
