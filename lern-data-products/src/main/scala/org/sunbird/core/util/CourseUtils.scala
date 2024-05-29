@@ -96,7 +96,8 @@ object CourseUtils {
     val container = config.getOrElse("container", "test-container").toString
     val storageKeyConfig = config.getOrElse("storageKeyConfig", "").asInstanceOf[String];
     val storageSecretConfig = config.getOrElse("storageSecretConfig", "").asInstanceOf[String];
-
+    JobLogger.log(s"saveReport storageKeyConfig: $storageKeyConfig, storageSecretConfig: $storageSecretConfig", None, INFO)
+    JobLogger.log(s"saveReport config: $config ", None, INFO)
     val provider = config.getOrElse("store", "local").toString
     if (storageKeyConfig != null && storageSecretConfig.nonEmpty) {
       storageConfig = StorageConfig(provider, container, config.getOrElse("filePath", "/tmp/druid-reports").toString, Option(AppConf.getConfig(storageKeyConfig)), Option(AppConf.getConfig(storageSecretConfig)))
