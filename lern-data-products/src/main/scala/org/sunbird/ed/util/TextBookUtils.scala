@@ -85,7 +85,9 @@ object TextBookUtils {
 
     val configMap = config("dialcodeReportConfig").asInstanceOf[Map[String, AnyRef]]
     val reportConfig = JSONUtils.deserialize[ReportConfig](JSONUtils.serialize(configMap))
-    val conf = Map("reportConfig"-> configMap,"store"->config("store"),"folderPrefix"->config("folderPrefix"),"filePath"->config("filePath"),"container"->config("container"),"format"->config("format"),"key"->config("key"))
+    val conf = Map("reportConfig"-> configMap,"store"->config("store"),"folderPrefix"->config("folderPrefix"),
+      "filePath"->config("filePath"),"container"->config("container"),"format"->config("format"),"key"->config("key"),
+    "storageKeyConfig"-> config("storageKeyConfig"), "storageSecretConfig" -> config("storageSecretConfig"))
     val scansDf = sc.parallelize(dialcodeScans).toDF().dropDuplicates("dialcodes")
 
     reportConfig.output.foreach { f =>
