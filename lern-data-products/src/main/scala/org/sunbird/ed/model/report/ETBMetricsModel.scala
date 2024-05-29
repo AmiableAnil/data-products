@@ -51,7 +51,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
   override def name: String = "ETBMetricsModel"
 
   override def preProcess(events: RDD[Empty], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[Empty] = {
-    CommonUtil.setStorageConf(config.getOrElse("store", "local").toString, config.get("accountKey").asInstanceOf[Option[String]], config.get("accountSecret").asInstanceOf[Option[String]])
+    CommonUtil.setStorageConf(config.getOrElse("store", "local").toString, config.get("storageKeyConfig").asInstanceOf[Option[String]], config.get("storageSecretConfig").asInstanceOf[Option[String]])
     sc.emptyRDD
   }
 
