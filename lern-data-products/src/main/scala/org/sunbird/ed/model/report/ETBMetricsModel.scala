@@ -262,6 +262,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
             |        "fields": ["id", "channel", "slug", "orgName"]
             |    }
             |}""".stripMargin
+    JobLogger.log("ETBMetricsModel: getTenantInfo: tenantRequest: "+ tenantRequest, None, Level.INFO)
     sc.parallelize(restUtil.post[TenantResponse](url, tenantRequest).result.response.content)
   }
 
