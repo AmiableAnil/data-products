@@ -41,6 +41,7 @@ object CourseUtils {
   implicit val className: String = "org.sunbird.core.util.CourseUtils"
   val defaultContentStatus: Array[String] = Array("Live", "Unlisted", "Retired")
   val defaultContentFields: Array[String] = Array("identifier","name","organisation","channel","status","keywords","createdFor","medium","subject")
+  var storageConfig: StorageConfig = _
 
   def getCourse(config: Map[String, AnyRef])(implicit fc: FrameworkContext, sparkSession: SparkSession): DataFrame = {
     import sparkSession.implicits._
@@ -93,7 +94,16 @@ object CourseUtils {
 
   def saveReport(data: DataFrame, config: Map[String, AnyRef], reportConfig: ReportConfig)(implicit sc: SparkContext, fc: FrameworkContext): Unit = {
     val container = config.getOrElse("container", "test-container").toString
-    val storageConfig = StorageConfig(config.getOrElse("store", "local").toString, container, config.getOrElse("filePath", "/tmp/druid-reports").toString, config.get("accountKey").asInstanceOf[Option[String]], config.get("accountSecret").asInstanceOf[Option[String]])
+    val storageKeyConfig = config.getOrElse("storageKeyConfig", "").asInstanceOf[String];
+    val storageSecretConfig = config.getOrElse("storageSecretConfig", "").asInstanceOf[String];
+
+    val provider = config.getOrElse("store", "local").toString
+    if (storageKeyConfig != null && storageSecretConfig.nonEmpty) {
+      storageConfig = StorageConfig(provider, container, config.getOrElse("filePath", "/tmp/druid-reports").toString, Option(AppConf.getConfig(storageKeyConfig)), Option(AppConf.getConfig(storageSecretConfig)))
+    } else {
+      storageConfig = StorageConfig(provider, container, config.getOrElse("filePath", "/tmp/druid-reports").toString, Option(provider), Option(provider));
+    }
+    //storageConfig = StorageConfig(config.getOrElse("store", "local").toString, container, config.getOrElse("filePath", "/tmp/druid-reports").toString, config.get("storageKeyConfig").asInstanceOf[Option[String]], config.get("storageSecretConfig").asInstanceOf[Option[String]])
     JobLogger.log(s"saveReport account details: " + storageConfig.accountKey.getOrElse("NA") + " " + storageConfig.secretKey.getOrElse("NA"), None, INFO)
     val format = config.getOrElse("format", "csv").asInstanceOf[String]
     val key = config.getOrElse("key", null).asInstanceOf[String]
