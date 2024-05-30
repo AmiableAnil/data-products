@@ -4,11 +4,11 @@ import org.apache.spark.SparkContext
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.storage.StorageLevel
+import org.ekstep.analytics.framework._
+import org.ekstep.analytics.framework.conf.AppConf
 import org.ekstep.analytics.framework.fetcher.DruidDataFetcher
 import org.ekstep.analytics.framework.util.{CommonUtil, JSONUtils, JobLogger, RestUtil}
-import org.ekstep.analytics.framework._
 import org.sunbird.core.exhaust.BaseReportsJob
-import org.sunbird.sourcing.FunnelReport.{connProperties, programTable, url}
 import org.sunbird.sourcing.SourcingMetrics.{getTenantInfo, saveReportToBlob}
 
 case class TextbookDetails(identifier: String, name: String, board: String, medium: String, gradeLevel: String, subject: String,
@@ -26,6 +26,10 @@ case class ContentReport(programId: String, board: String, medium: String, grade
 object ContentDetailsReport extends IJob with BaseReportsJob {
   implicit val className = "org.sunbird.sourcing.ContentDetailsReport"
   val jobName: String = "Content Details Job"
+  val db = AppConf.getConfig("postgres.db")
+  val url = AppConf.getConfig("postgres.url") + s"$db"
+  val connProperties = CommonUtil.getPostgresConnectionProps
+  val programTable = "program"
 
   // $COVERAGE-OFF$ Disabling scoverage for main method
   def main(config: String)(implicit sc: Option[SparkContext], fc: Option[FrameworkContext]): Unit = {

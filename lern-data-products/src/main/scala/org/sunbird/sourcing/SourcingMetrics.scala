@@ -187,8 +187,7 @@ object SourcingMetrics extends IJob with BaseReportsJob {
     JobLogger.log(s"$jobName: Saving $reportName to blob", None, INFO)
 
     reportConfig.output.map(format => {
-      renamedDf.saveToBlobStore(storageConfig, format.`type`, reportPath,
-        Option(Map("header" -> "true")), Option(List("slug","reportName")))
+      renamedDf.saveToBlobStore(storageConfig, format.`type`, reportPath, Option(Map("header" -> "true")), Option(List("slug","reportName")))
     })
   }
 
