@@ -2,13 +2,13 @@
 
 export SPARK_HOME={{ analytics.home }}/spark-{{ spark_version }}-bin-hadoop2.7
 export MODELS_HOME={{ analytics.home }}/models-{{ model_version }}
-export DP_LOGS={{ analytics.home }}/logs/data-products
+export DP_LOGS={{ analytics.home }}/logs/lern-data-products
 ## Job to run daily
 cd {{ analytics.home }}/scripts
 source dock-model-config.sh
 today=$(date "+%Y-%m-%d")
 
-libs_path="{{ analytics.home }}/models-{{ model_version }}/data-products-1.0"
+libs_path="{{ analytics.home }}/models-{{ model_version }}/lern-data-products-1.0"
 file_path="dock-{{ env }}.conf"
 	
 get_report_job_model_name(){
