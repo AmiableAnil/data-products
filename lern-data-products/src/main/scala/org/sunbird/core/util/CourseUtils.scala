@@ -77,6 +77,7 @@ object CourseUtils {
   }
 
   def postDataToBlob(data: DataFrame, outputConfig: OutputConfig, config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext) = {
+    JobLogger.log("CourseDetails: postDataToBlob started", None, INFO)
     val configMap = config("reportConfig").asInstanceOf[Map[String, AnyRef]]
     val reportConfig = JSONUtils.deserialize[ReportConfig](JSONUtils.serialize(configMap))
 
@@ -89,6 +90,7 @@ object CourseUtils {
     val renamedDf = filteredDf.select(filteredDf.columns.map(c => filteredDf.col(c).as(labelsLookup.getOrElse(c, c))): _*).na.fill("unknown")
     val reportFinalId = if (outputConfig.label.nonEmpty && outputConfig.label.get.nonEmpty) reportConfig.id + "/" + outputConfig.label.get else reportConfig.id
     val finalDf = renamedDf.na.replace("Status", Map("0"->BatchStatus(0).toString, "1"->BatchStatus(1).toString, "2"->BatchStatus(2).toString))
+    finalDf.show(5, false)
     saveReport(finalDf, config ++ Map("dims" -> dimsLabels, "reportId" -> reportFinalId, "fileParameters" -> outputConfig.fileParameters), reportConfig)
   }
 
@@ -113,11 +115,13 @@ object CourseUtils {
     val dims = config.getOrElse("folderPrefix", List()).asInstanceOf[List[String]]
     val reportMergeConfig = reportConfig.mergeConfig
     JobLogger.log(s"saveReport var details: container: $container, storageConfig: $storageConfig, format: $format, key: $key, reportId: $reportId, fileParameters: $fileParameters, dims: $dims", None, INFO)
+    data.show(5, false)
     val deltaFiles = if (dims.nonEmpty) {
       data.saveToBlobStore(storageConfig, format, reportId, Option(Map("header" -> "true")), Option(dims))
     } else {
       data.saveToBlobStore(storageConfig, format, reportId, Option(Map("header" -> "true")), None)
     }
+    deltaFiles.foreach(f => JobLogger.log(s"Delta Files: $f", None, INFO))
     if(reportMergeConfig.nonEmpty) {
       val mergeConf = reportMergeConfig.get
       val reportPath = mergeConf.reportPath

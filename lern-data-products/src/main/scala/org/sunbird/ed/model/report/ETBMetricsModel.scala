@@ -52,6 +52,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
   override def name: String = "ETBMetricsModel"
 
   override def preProcess(events: RDD[Empty], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[Empty] = {
+    JobLogger.log("ETBMetricsModel: preProcess started", None, INFO)
     val storageKeyConfig = config.getOrElse("storageKeyConfig", "").asInstanceOf[String];
     val storageSecretConfig = config.getOrElse("storageSecretConfig", "").asInstanceOf[String];
     JobLogger.log(s"ETBMetricsModel: preProcess storageKeyConfig: $storageKeyConfig, storageSecretConfig: $storageSecretConfig", None, INFO)
@@ -60,12 +61,14 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
   }
 
   override def algorithm(events: RDD[Empty], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[FinalOutput] = {
+    JobLogger.log("ETBMetricsModel: algorithm started", None, INFO)
     generateReports(config)
   }
 
   override def postProcess(events: RDD[FinalOutput], config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): RDD[FinalOutput] = {
     implicit val sparkSession: SparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
     import sparkSession.implicits._
+    JobLogger.log("ETBMetricsModel: postProcess starts", None, INFO)
 
     if(events.count() > 0) {
       val configMap = config("reportConfig").asInstanceOf[Map[String, AnyRef]]
@@ -93,11 +96,13 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
         val reportConfig = config("reportConfig").asInstanceOf[Map[String,AnyRef]]
         val mergeConf = reportConfig.getOrElse("mergeConfig", Map()).asInstanceOf[Map[String,AnyRef]]
 
+        JobLogger.log("ETBMetricsModel: postProcess etbtextbook.filename saving to blob", None, INFO)
         val etbDf = etbTextBookReport.toDF().dropDuplicates("identifier","status")
           .orderBy('medium,split(split('gradeLevel,",")(0)," ")(1).cast("int"),'subject,'identifier,'status)
         var reportMap = updateReportPath(mergeConf, reportConfig, AppConf.getConfig("etbtextbook.filename"))
         CourseUtils.postDataToBlob(etbDf,f,config.updated("reportConfig",reportMap))
 
+        JobLogger.log("ETBMetricsModel: postProcess dcetextbook.filename saving to blob", None, INFO)
         val dceDf = dceTextBookReport.toDF().dropDuplicates()
           .orderBy('medium,split(split('gradeLevel,",")(0)," ")(1).cast("int"),'subject)
         reportMap = updateReportPath(mergeConf, reportConfig, AppConf.getConfig("dcetextbook.filename"))
@@ -105,6 +110,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
 
         generateAggReports(etbDf, dceDf, f, List(config, reportConfig, mergeConf))
 
+        JobLogger.log("ETBMetricsModel: postProcess dcedialcode.filename saving to blob", None, INFO)
         val dialdceDF = dceDialcodeReport.toDF()
         val dialcodeDCE = dialdceDF.join(scansDF,dialdceDF.col("dialcode")===scansDF.col("dialcodes"),"left_outer")
           .drop("dialcodes","noOfScans","status","nodeType","noOfContent")
@@ -113,6 +119,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
         reportMap = updateReportPath(mergeConf, reportConfig, AppConf.getConfig("dcedialcode.filename"))
         CourseUtils.postDataToBlob(dialcodeDCE,f,config.updated("reportConfig",reportMap))
 
+        JobLogger.log("ETBMetricsModel: postProcess etbdialcode.filename saving to blob", None, INFO)
         val dialetbDF = etbDialcodeReport.toDF()
         val dialcodeETB = dialetbDF.join(scansDF,dialetbDF.col("dialcode")===scansDF.col("dialcodes"),"left_outer")
           .drop("dialcodes","noOfScans","term")
@@ -122,6 +129,8 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
         CourseUtils.postDataToBlob(dialcodeETB,f,config.updated("reportConfig",reportMap))
       }
     }
+    JobLogger.log("ETBMetricsModel: postProcess ends showing the events data", None, INFO)
+    events.toDF().show(5, false)
     events
   }
 
@@ -137,6 +146,7 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
     implicit val sparkSession: SparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
     import sparkSession.implicits._
 
+    JobLogger.log("ETBMetricsModel: generateAggReports started", None, INFO)
     //dce_qr_content_status_grade.csv
     val dceGradeDf = dceDf.select($"slug",$"contentLinkedQR",$"withoutContentQR",explode_outer(split('gradeLevel,",")).as("Class"))
       .groupBy("Class","slug").agg(sum("contentLinkedQR").alias("QR Codes with content"),sum("withoutContentQR").alias("QR Codes without content")).withColumn("reportName",lit("dce_qr_content_status_grade"))
@@ -212,10 +222,12 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
       .agg(sum("Total").alias("Count")).withColumn("reportName",lit("etb_textbook_status"))
     reportMap = updateReportPath(aggConf(2), aggConf(1), "etb_textbook_status.csv")
     CourseUtils.postDataToBlob(etbTextbookStatus,outputConf,aggConf.head.updated("reportConfig",reportMap))
+    JobLogger.log("ETBMetricsModel: generateAggReports ended", None, INFO)
 
   }
 
   def getScanCounts(config: Map[String, AnyRef])(implicit sparkSession: SparkSession, fc: FrameworkContext): DataFrame = {
+    JobLogger.log("ETBMetricsModel: getScanCounts started", None, INFO)
     val store = config("store")
     val conf = config("etbFileConfig").asInstanceOf[Map[String, AnyRef]]
     val url = store match {
@@ -232,21 +244,25 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
         s"s3n://$bucket/$file"
     }
 
+    JobLogger.log(s"ETBMetricsModel: getScanCounts url: $url", None, INFO)
     val scansCount = sparkSession.read
       .option("header","true")
       .csv(url)
 
     val scansDF = scansCount.selectExpr("Date", "dialcodes", "cast(scans as int) scans")
+    JobLogger.log("ETBMetricsModel: scansDF records", None, INFO)
+    scansDF.show(5, false)
     scansDF.groupBy(scansDF("dialcodes")).sum("scans")
   }
 
   def generateReports(config: Map[String, AnyRef])(implicit sc: SparkContext, fc: FrameworkContext): (RDD[FinalOutput]) = {
+    JobLogger.log("ETBMetricsModel: generateReports started", None, INFO)
     val metrics = CommonUtil.time({
       val textBookInfo = TextBookUtils.getTextBooks(config)
       val tenantInfo = getTenantInfo(config, RestUtil)
       TextBookUtils.getTextbookHierarchy(config, textBookInfo, tenantInfo, RestUtil)
     })
-    JobLogger.log("ETBMetricsModel: ",Option(Map("recordCount" -> metrics._2.count(), "timeTaken" -> metrics._1)), Level.INFO)
+    JobLogger.log("ETBMetricsModel: generateReports ended: ",Option(Map("recordCount" -> metrics._2.count(), "timeTaken" -> metrics._1)), Level.INFO)
     metrics._2
   }
 

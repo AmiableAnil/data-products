@@ -2,10 +2,11 @@ package org.sunbird.ed.util
 
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.ekstep.analytics.framework.Level.INFO
 import org.ekstep.analytics.framework.conf.AppConf
 import org.ekstep.analytics.framework.fetcher.DruidDataFetcher
-import org.ekstep.analytics.framework.util.{HTTPClient, JSONUtils, RestUtil}
+import org.ekstep.analytics.framework.util.{HTTPClient, JSONUtils, JobLogger, RestUtil}
 import org.ekstep.analytics.framework.{DruidQueryModel, FrameworkContext, Params}
 import org.ekstep.analytics.model.ReportConfig
 import org.sunbird.core.util.CourseUtils
@@ -31,12 +32,16 @@ object TBConstants {
 }
 
 object TextBookUtils {
+  implicit val className: String = "org.sunbird.ed.util.TextBookUtils"
 
   def getTextBooks(config: Map[String, AnyRef])(implicit sc:SparkContext,fc: FrameworkContext): List[TextbookData] = {
+    implicit val sparkSession: SparkSession = SparkSession.builder().config(sc.getConf).getOrCreate()
+    import sparkSession.implicits._
+    JobLogger.log("TextBookUtils: getTextBooks started", None, INFO)
     val request = JSONUtils.serialize(config.get("druidConfig").get)
     val druidQuery = JSONUtils.deserialize[DruidQueryModel](request)
     val druidResponse = DruidDataFetcher.getDruidData(druidQuery, true)
-
+    druidResponse.toDF().show(5, false)
     val result = druidResponse.map(f => {
       JSONUtils.deserialize[TextbookData](f)
     })
@@ -44,6 +49,7 @@ object TextBookUtils {
   }
 
   def getTextbookHierarchy(config: Map[String, AnyRef], textbookInfo: List[TextbookData],tenantInfo: RDD[TenantInfo],restUtil: HTTPClient)(implicit sc: SparkContext, fc: FrameworkContext): (RDD[FinalOutput]) = {
+    JobLogger.log("TextBookUtils: getTextbookHierarchy started", None, INFO)
     val reportTuple = for {textbook <- textbookInfo
                            baseUrl = s"${AppConf.getConfig("hierarchy.search.api.url")}${AppConf.getConfig("hierarchy.search.api.path")}${textbook.identifier}"
                            finalUrl = if("Live".equals(textbook.status)) baseUrl else s"$baseUrl?mode=edit"
@@ -80,6 +86,7 @@ object TextBookUtils {
   }
 
   def generateWeeklyScanReport(config: Map[String, AnyRef], dialcodeScans: List[WeeklyDialCodeScans])(implicit sc: SparkContext, fc: FrameworkContext) {
+    JobLogger.log("TextBookUtils: generateWeeklyScanReport started", None, INFO)
     implicit val sqlContext = new SQLContext(sc)
     import sqlContext.implicits._
 
@@ -89,7 +96,7 @@ object TextBookUtils {
       "filePath"->config("filePath"),"container"->config("container"),"format"->config("format"),"key"->config("key"),
     "storageKeyConfig"-> config("storageKeyConfig"), "storageSecretConfig" -> config("storageSecretConfig"))
     val scansDf = sc.parallelize(dialcodeScans).toDF().dropDuplicates("dialcodes")
-
+    scansDf.show(5,false)
     reportConfig.output.foreach { f =>
       CourseUtils.postDataToBlob(scansDf,f,conf)
     }
