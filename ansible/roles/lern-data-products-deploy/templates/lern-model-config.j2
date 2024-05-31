@@ -21,7 +21,7 @@ config() {
   baseScriptPath="{{ spark_output_temp_dir }}"
   reportPostContainer="{{ reports_container }}"
   druidIngestionURL="{{ druid_rollup_cluster_ingestion_task_url }}/druid/indexer/v1/task"
-    assessTopic={{ assess_topic }}
+  assessTopic={{ assess_topic }}
 
 
   if [ -z "$2" ]; then endDate=$(date --date yesterday "+%Y-%m-%d"); else endDate=$2; fi #used as fromSpecificDate in usercacheindxerjob
