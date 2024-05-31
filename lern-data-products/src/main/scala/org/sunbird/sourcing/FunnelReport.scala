@@ -10,9 +10,9 @@ import org.ekstep.analytics.framework.util.DatasetUtil.extensions
 import org.ekstep.analytics.framework.util._
 import org.ekstep.analytics.framework._
 import org.ekstep.analytics.model.ReportConfig
-import org.ekstep.analytics.util.Constants
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
+import org.sunbird.core.util.Constants
 import org.sunbird.ed.model.report.{TenantInfo, TenantResponse}
 import org.sunbird.lms.job.report.BaseReportsJob
 
@@ -193,7 +193,7 @@ object FunnelReport extends IJob with BaseReportsJob {
   }
 
   def getTenantInfo(restUtil: HTTPClient)(implicit sc: SparkContext): RDD[TenantInfo] = {
-    val url = Constants.ORG_SEARCH_URL
+    val url = Constants.ORG_PRIVATE_SEARCH_URL
 
     val tenantRequest = s"""{
                            |    "params": { },
