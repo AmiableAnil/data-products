@@ -164,7 +164,6 @@ object SourcingMetrics extends IJob with BaseReportsJob {
   }
 
   def getTenantInfo(restUtil: HTTPClient)(implicit sc: SparkContext): RDD[TenantInfo] = {
-//    val url = Constants.ORG_SEARCH_URL
     val url = Constants.ORG_PRIVATE_SEARCH_URL
     val tenantRequest = s"""{
                            |    "params": { },
@@ -175,6 +174,8 @@ object SourcingMetrics extends IJob with BaseReportsJob {
                            |        "fields": ["id", "channel", "slug", "orgName"]
                            |    }
                            |}""".stripMargin
+    JobLogger.log("SourcingMetrics: getTenantInfo: url: "+ url, None, Level.INFO)
+    JobLogger.log("SourcingMetrics: getTenantInfo: tenantRequest: "+ tenantRequest, None, Level.INFO)
     sc.parallelize(restUtil.post[TenantResponse](url, tenantRequest).result.response.content)
   }
 
