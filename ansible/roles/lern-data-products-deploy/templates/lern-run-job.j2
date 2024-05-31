@@ -57,6 +57,12 @@ get_report_job_model_name(){
     ;;
     "etb-metrics") echo 'org.sunbird.ed.job.report.ETBMetricsJob'
   	;;
+    "funnel-report") echo 'org.sunbird.sourcing.FunnelReport'
+    ;;
+    "sourcing-metrics") echo 'org.sunbird.sourcing.SourcingMetrics'
+    ;;
+    "content-details") echo 'org.sunbird.sourcing.ContentDetailsReport'
+    ;;
     *) echo $1
     ;;
   esac
