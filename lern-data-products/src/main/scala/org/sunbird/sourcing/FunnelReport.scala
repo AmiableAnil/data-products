@@ -76,6 +76,7 @@ object FunnelReport extends IJob with BaseReportsJob {
 
   // $COVERAGE-ON$ Enabling scoverage for all other functions
   def execute()(implicit spark: SparkSession, fc: FrameworkContext, config: JobConfig): Map[String, Long] = {
+    JobLogger.log("FunnelReport: execute method starts", None, Level.INFO)
     implicit val sc = spark.sparkContext
     import spark.implicits._
     val tenantInfo = getTenantInfo(RestUtil).toDF()
@@ -83,6 +84,7 @@ object FunnelReport extends IJob with BaseReportsJob {
   }
 
   def process(tenantInfo: DataFrame)(implicit spark: SparkSession, config: JobConfig): Map[String, Long] = {
+    JobLogger.log("FunnelReport: process method starts", None, Level.INFO)
     implicit val sqlContext = new SQLContext(spark.sparkContext)
     import sqlContext.implicits._
 
@@ -127,7 +129,9 @@ object FunnelReport extends IJob with BaseReportsJob {
     saveReportToBlob(funnelReport, configMap, storageConfig, "FunnelReport")
 
     funnelReport.unpersist(true)
-    Map("funnelReportCount"->funnelReport.count())
+    val funnelReportCount = funnelReport.count();
+    JobLogger.log(s"FunnelReport: process method ends with count: $funnelReportCount", None, Level.INFO)
+    Map("funnelReportCount"->funnelReportCount)
   }
 
   def getDruidQuery(query: String, programId: String, interval: String): DruidQueryModel = {
