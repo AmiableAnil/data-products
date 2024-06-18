@@ -27,8 +27,8 @@ channel: dev-test
 druid_broker_host: "{{groups['raw-broker'][0]}}"
 druid_router_host: "{{groups['raw-router'][0]}}"
 druid_rollup_broker_host: "{{groups['raw-broker'][0]}}"
-hierarchySearchServiceUrl: "{{ proto }}://{{ domain_name }}/action/content"
-hierarchySearchServicEndpoint: /v3/hierarchy/
+hierarchySearchServiceUrl: "http://{{ private_ingressgateway_ip }}/content"
+hierarchySearchServicEndpoint: /collection/v4/hierarchy/
 
 user_table_keyspace: "sunbird"
 course_keyspace: "sunbird_courses"
