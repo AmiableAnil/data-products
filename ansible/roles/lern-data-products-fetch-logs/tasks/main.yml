@@ -59,7 +59,7 @@
   tags:
     - run-job
 
-- name: Run Job
+- name: Dock Run Job
   become: yes
   become_user: "{{ analytics_user }}"
   shell: "nohup {{ analytics.home }}/scripts/dock-run-job.sh {{ job_id }} {{ batch_id }} {{ keyword }} &"
