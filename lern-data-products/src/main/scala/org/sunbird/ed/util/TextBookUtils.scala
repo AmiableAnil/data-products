@@ -53,6 +53,7 @@ object TextBookUtils {
     val reportTuple = for {textbook <- textbookInfo
                            baseUrl = s"${AppConf.getConfig("hierarchy.search.api.url")}${AppConf.getConfig("hierarchy.search.api.path")}${textbook.identifier}"
                            finalUrl = if("Live".equals(textbook.status)) baseUrl else s"$baseUrl?mode=edit"
+
                            response = RestUtil.get[ContentDetails](finalUrl)
                            tupleData = if(null != response && "successful".equals(response.params.status)) {
                              val data = response.result.content
@@ -96,6 +97,7 @@ object TextBookUtils {
       "filePath"->config("filePath"),"container"->config("container"),"format"->config("format"),"key"->config("key"),
     "storageKeyConfig"-> config("storageKeyConfig"), "storageSecretConfig" -> config("storageSecretConfig"))
     val scansDf = sc.parallelize(dialcodeScans).toDF().dropDuplicates("dialcodes")
+    JobLogger.log("TextBookUtils: generateWeeklyScanReport check scansDf columns: "+scansDf.columns.toSeq, None, INFO)
     scansDf.show(5,false)
     reportConfig.output.foreach { f =>
       CourseUtils.postDataToBlob(scansDf,f,conf)

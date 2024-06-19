@@ -98,6 +98,7 @@ object SourcingMetrics extends IJob with BaseReportsJob {
   }
 
   def getTextbookInfo(textbooks: List[TextbookInfo])(implicit spark: SparkSession,fc: FrameworkContext): (List[TextbookReportResult],List[ContentReportResult]) = {
+    JobLogger.log("SourcingMetrics::getTextbookInfo starts ",None, Level.INFO)
     val encoders = Encoders.product[ContentHierarchy]
     var textbookReportData = List[TextbookReportResult]()
     var contentReportData = List[ContentReportResult]()
@@ -106,6 +107,7 @@ object SourcingMetrics extends IJob with BaseReportsJob {
       val textbookHierarchy = spark.read.format("org.apache.spark.sql.cassandra").options(Map("table" -> "content_hierarchy", "keyspace" -> sunbirdHierarchyStore)).load()
         .where(col("identifier") === textbook.identifier)
       val count = textbookHierarchy.count()
+      JobLogger.log(s"SourcingMetrics::getTextbookInfo textbookHierarchy count: $count",None, Level.INFO)
       if(count > 0) {
         val textbookRdd = textbookHierarchy.as[ContentHierarchy](encoders).first()
         val hierarchy = JSONUtils.deserialize[TextbookHierarchy](textbookRdd.hierarchy)
