@@ -65,6 +65,8 @@ object SourcingMetrics extends IJob with BaseReportsJob {
 
     val textbookReportData = getTextbookInfo(textbooks)
     val textbookReports = textbookReportData._1.toDF()
+    JobLogger.log(s"SourcingMetrics: execute textbookReports ${textbookReports.columns}",None, Level.INFO)
+    textbookReports.show(5, false)
     val tenantInfo = getTenantInfo(RestUtil).toDF()
     JobLogger.log(s"$jobName: Generated report metrics - textbook: ${textbookReportData._1.length}, contents: ${textbookReportData._2.length}", None, INFO)
     val report = textbookReports.join(tenantInfo,
@@ -107,14 +109,17 @@ object SourcingMetrics extends IJob with BaseReportsJob {
       val textbookHierarchy = spark.read.format("org.apache.spark.sql.cassandra").options(Map("table" -> "content_hierarchy", "keyspace" -> sunbirdHierarchyStore)).load()
         .where(col("identifier") === textbook.identifier)
       val count = textbookHierarchy.count()
-      JobLogger.log(s"SourcingMetrics::getTextbookInfo textbookHierarchy count: $count",None, Level.INFO)
+      JobLogger.log(s"SourcingMetrics::getTextbookInfo textbookHierarchy count: $count with identifier: $textbook.identifier",None, Level.INFO)
       if(count > 0) {
         val textbookRdd = textbookHierarchy.as[ContentHierarchy](encoders).first()
+        JobLogger.log(s"SourcingMetrics::getTextbookInfo hierarchy as string: $textbookRdd.hierarchy",None, Level.INFO)
         val hierarchy = JSONUtils.deserialize[TextbookHierarchy](textbookRdd.hierarchy)
+        JobLogger.log(s"SourcingMetrics::getTextbookInfo hierarchy data: $hierarchy",None, Level.INFO)
         val reportMetrics = generateReport(List(hierarchy),List(), List(),hierarchy,List(),List("","0"))
         val textbookData = reportMetrics._1
         val contentData = reportMetrics._2
         val totalChapters = reportMetrics._3
+        JobLogger.log(s"SourcingMetrics::getTextbookInfo generateReport done with textbookData: $textbookData contentData: $contentData totalChapters: $totalChapters",None, Level.INFO)
         val report = textbookData.map(f => TextbookReportResult(textbook.identifier,f.l1identifier,textbook.board,textbook.medium,textbook.gradeLevel,textbook.subject,textbook.name,f.chapters,textbook.channel,totalChapters, textbook.primaryCategory))
         textbookReportData = report.reverse ++ textbookReportData
         contentReportData = contentData ++ contentReportData
