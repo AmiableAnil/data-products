@@ -76,6 +76,7 @@ object SourcingMetrics extends IJob with BaseReportsJob {
 
   def process(contentdf: DataFrame, report: DataFrame)(implicit spark: SparkSession, config: JobConfig): Map[String, Long] = {
     import spark.implicits._
+    JobLogger.log("SourcingMetrics::process starts ",None, Level.INFO)
     val contentChapter = contentdf.groupBy("identifier","l1identifier")
       .pivot(concat(lit("Number of "), col("contentType"))).agg(count("l1identifier"))
     val contentTb = contentdf.groupBy("identifier")
@@ -109,17 +110,17 @@ object SourcingMetrics extends IJob with BaseReportsJob {
       val textbookHierarchy = spark.read.format("org.apache.spark.sql.cassandra").options(Map("table" -> "content_hierarchy", "keyspace" -> sunbirdHierarchyStore)).load()
         .where(col("identifier") === textbook.identifier)
       val count = textbookHierarchy.count()
-      JobLogger.log(s"SourcingMetrics::getTextbookInfo textbookHierarchy count: $count with identifier: ${textbook.identifier}",None, Level.INFO)
       if(count > 0) {
         val textbookRdd = textbookHierarchy.as[ContentHierarchy](encoders).first()
-        JobLogger.log(s"SourcingMetrics::getTextbookInfo hierarchy as string: ${textbookRdd.hierarchy}",None, Level.INFO)
-        val hierarchy = JSONUtils.deserialize[TextbookHierarchy](textbookRdd.hierarchy)
-        JobLogger.log(s"SourcingMetrics::getTextbookInfo hierarchy data: $hierarchy",None, Level.INFO)
+        val textbookHierarchyStr = textbookRdd.hierarchy
+        if(textbookHierarchyStr.isBlank) {
+          JobLogger.log(s"SourcingMetrics::getTextbookInfo hierarchy is empty for identifier: ${textbook.identifier}",None, Level.INFO)
+        }
+        val hierarchy = JSONUtils.deserialize[TextbookHierarchy](textbookHierarchyStr)
         val reportMetrics = generateReport(List(hierarchy),List(), List(),hierarchy,List(),List("","0"))
         val textbookData = reportMetrics._1
         val contentData = reportMetrics._2
         val totalChapters = reportMetrics._3
-        JobLogger.log(s"SourcingMetrics::getTextbookInfo generateReport done with textbookData: $textbookData contentData: $contentData totalChapters: $totalChapters",None, Level.INFO)
         val report = textbookData.map(f => TextbookReportResult(textbook.identifier,f.l1identifier,textbook.board,textbook.medium,textbook.gradeLevel,textbook.subject,textbook.name,f.chapters,textbook.channel,totalChapters, textbook.primaryCategory))
         textbookReportData = report.reverse ++ textbookReportData
         contentReportData = contentData ++ contentReportData
