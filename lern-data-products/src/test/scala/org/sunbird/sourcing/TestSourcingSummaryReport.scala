@@ -1,125 +1,149 @@
 package org.sunbird.sourcing
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
-import com.ing.wbaa.druid._
+import java.io.File
+import java.sql.{Connection, Statement}
+import java.time.{ZoneOffset, ZonedDateTime}
+import com.ing.wbaa.druid.{DruidConfig, DruidQuery, DruidResponse, DruidResponseTimeseriesImpl, DruidResult, QueryType}
 import com.ing.wbaa.druid.client.DruidClient
 import io.circe.Json
 import io.circe.parser.parse
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.{Encoders, SQLContext, SparkSession}
-import org.ekstep.analytics.framework.util.{HadoopFileUtil, JSONUtils}
-import org.ekstep.analytics.framework.{FrameworkContext, JobConfig, StorageConfig}
+import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.ekstep.analytics.framework.{FrameworkContext, JobConfig}
+import org.ekstep.analytics.framework.util.JSONUtils
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Matchers
-import org.sunbird.core.util.{EmbeddedCassandra, SparkSpec}
-import org.sunbird.sourcing.SourcingMetrics.sunbirdHierarchyStore
+import org.sunbird.core.util.{EmbeddedPostgresql, SparkSpec}
 
-import java.time.{ZoneOffset, ZonedDateTime}
+import scala.concurrent.Future
 
-class TestSourcingMetrics extends SparkSpec with Matchers with MockFactory {
+class TestSourcingSummaryReport extends SparkSpec with Matchers with MockFactory {
+
   implicit var spark: SparkSession = _
+  val programTable = "program"
+  val nominationTable = "nomination"
+  var connection: Connection = null;
+  var stmt: Statement = null;
 
   override def beforeAll(): Unit = {
     super.beforeAll()
     spark = getSparkSession()
-    EmbeddedCassandra.loadData("src/test/resources/reports/reports_textbook_data.cql")
+    EmbeddedPostgresql.start()
+    EmbeddedPostgresql.createProgramTable()
+    EmbeddedPostgresql.createNominationTable()
+    createUserTable()
   }
 
-  override def afterAll() : Unit = {
+  override def afterAll() {
     super.afterAll()
-    new HadoopFileUtil().delete(spark.sparkContext.hadoopConfiguration, "sourcing")
+    EmbeddedPostgresql.dropTable(programTable)
+    EmbeddedPostgresql.dropTable(nominationTable)
+    EmbeddedPostgresql.dropTable("\"V_User\"")
+    EmbeddedPostgresql.close()
   }
 
-  it should "execute generate SourcingMetrics report" in {
+  def createUserTable(): Unit = {
+    val tableName: String = "\"V_User\""
+    val orgtableName: String = "\"V_User_Org\""
+    val userId = "\"userId\""
+    val userQuery =
+      s"""
+         |CREATE TABLE IF NOT EXISTS $tableName (
+         |    osid TEXT,
+         |    $userId TEXT)""".stripMargin
+
+    val userOrgQuery =
+      s"""
+         |CREATE TABLE IF NOT EXISTS $orgtableName (
+         |    $userId TEXT,
+         |    roles TEXT)""".stripMargin
+
+    EmbeddedPostgresql.execute(userQuery)
+    EmbeddedPostgresql.execute(userOrgQuery)
+  }
+
+  def insertData(): Unit = {
+    val tableName: String = "\"V_User\""
+    val orgtableName: String = "\"V_User_Org\""
+    val userId = "\"userId\""
+    val userQuery = s"""INSERT INTO $tableName(osid,$userId) VALUES('0124698765480987654','0124698765480987654')""".stripMargin
+    val orgQuery = s"""INSERT INTO $orgtableName($userId, roles) VALUES('0124698765480987654','["admin"]')""".stripMargin
+    EmbeddedPostgresql.execute(userQuery)
+    EmbeddedPostgresql.execute(orgQuery)
+  }
+
+  it should "generate the sourcing report" in {
     implicit val sc = spark.sparkContext
     implicit val mockFc = mock[FrameworkContext]
-    val sqlContext = new SQLContext(sc)
+    val resourceName = "ingestion-spec/sourcing-ingestion-spec.json"
+    val classLoader = getClass.getClassLoader
+    val file = new File(classLoader.getResource(resourceName).getFile)
+    val absolutePath = file.getAbsolutePath
+    val config = s"""{"search": {"type": "none"},"model": "org.ekstep.analytics.job.report.SourcingReports","modelParams": {"druidHost":"https://11087f25-9a3f-4305-98b7-9fee523e7967.mock.pstmn.io","specPath":"$absolutePath","dbName":"postgres","druidQuery": {"queryType": "groupBy","dataSource": "vdn-content-model-snapshot","intervals": "1901-01-01T00:00:00+00:00/2101-01-01T00:00:00+00:00","aggregations": [{"name": "count","type": "count"}],"dimensions": [{"fieldName": "primaryCategory","aliasName": "primaryCategory"},{"fieldName": "createdBy","aliasName": "createdBy"}],  "filters": [{"type": "equals","dimension": "objectType","value": "Content"}, {"type": "equals","dimension": "sampleContent","value": "false"}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"reportConfig": {"id": "funnel_report","metrics": [],"labels": {"reportDate": "Report generation date","visitors": "No. of users opening the project","projectName": "Project Name","initiatedNominations": "No. of initiated nominations","rejectedNominations": "No. of rejected nominations","pendingNominations": "No. of nominations pending review","acceptedNominations": "No. of accepted nominations to the project","noOfContributors": "No. of contributors to the project","noOfContributions": "No. of contributions to the project","pendingContributions": "No. of contributions pending review","approvedContributions": "No. of approved contributions"},"output": [{"type": "csv","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}, {"type": "json","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}]},"store": "azure","format": "csv","key": "druid-reports/","filePath": "druid-reports/","container": "reportPostContainer","folderPrefix": ["slug", "reportName"]},"sparkCassandraConnectionHost": "sunbirdPlatformCassandraHost","druidConfig": {"queryType": "timeseries","dataSource": "telemetry-events-syncts","intervals": "startdate/enddate","aggregations": [{"name": "visitors","type": "count","fieldName": "actor_id"}],"filters": [{"type": "equals","dimension": "context_cdata_id","value": "program_id"}, {"type": "equals","dimension": "edata_pageid","value": "contribution_project_contributions"}, {"type": "equals","dimension": "context_pdata_pid","value": "creation-portal.programs"}, {"type": "equals","dimension": "context_cdata_type","value": "project"}, {"type": "equals","dimension": "context_env","value": "creation-portal"}, {"type": "equals","dimension": "eid","value": "IMPRESSION"}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"output": [{"to": "console","params": {"printEvent": false}}],"parallelization": 8,"appName": "Funnel Report Job","deviceMapping": false}""".stripMargin
+    implicit val jobConfig = JSONUtils.deserialize[JobConfig](config)
+
+    implicit val sqlContext = new SQLContext(sc)
 
     //mocking for DruidDataFetcher
+    import scala.concurrent.ExecutionContext.Implicits.global
     val json: String =
       """
         |{
-        |    "identifier": "do_11298391390121984011",
-        |    "channel": "0124698765480987654",
-        |    "status": "Live",
-        |    "name": "Kayal_Book",
-        |    "board":"AP",
-        |    "gradeLevel": "Class 8",
-        |    "date": "2020-03-25",
-        |    "medium": "English",
-        |    "subject": "Mathematics",
-        |    "primaryCategory": "Digital Textbook"
+        |    "primaryCategory": "Practise Question Set",
+        |    "createdBy": "0124698765480987654",
+        |    "count": 2.0
         |  }
       """.stripMargin
 
     val doc: Json = parse(json).getOrElse(Json.Null)
     val results = List(DruidResult.apply(Some(ZonedDateTime.of(2020, 1, 23, 17, 10, 3, 0, ZoneOffset.UTC)), doc))
-    val druidResponse = DruidResult.apply(Some(ZonedDateTime.of(2019, 11, 28, 17, 0, 0, 0, ZoneOffset.UTC)), doc)
+    val druidResponse = DruidResponseTimeseriesImpl.apply(results, QueryType.GroupBy)
+
     implicit val mockDruidConfig = DruidConfig.DefaultConfig
     val mockDruidClient = mock[DruidClient]
-    (mockDruidClient.actorSystem _).expects().returning(ActorSystem("TestQuery")).anyNumberOfTimes()
-    (mockDruidClient.doQueryAsStream(_: DruidQuery)(_: DruidConfig)).expects(*, mockDruidConfig).returns(Source(List(druidResponse))).anyNumberOfTimes()
+    (mockDruidClient.doQuery[DruidResponse](_: DruidQuery)(_: DruidConfig)).expects(*, mockDruidConfig).returns(Future(druidResponse)).anyNumberOfTimes()
     (mockFc.getDruidRollUpClient _).expects().returns(mockDruidClient).anyNumberOfTimes()
-    val config = """{"search": {"type": "none"},"model": "org.ekstep.analytics.job.report.VDNMetricsJob","modelParams": {"reportConfig": {"id": "vdn_report","metrics": [],"labels": {"date": "Date","name": "Textbook Name","medium": "Medium","gradeLevel": "Grade","subject": "Subject","board": "Board","grade": "Grade","chapters": "Chapter Name","totalChapters": "Total number of chapters (first level sections of ToC)","status": "Textbook Status"},"output": [{"type": "csv","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}, {"type": "json","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}]},"druidConfig": {"queryType": "groupBy","dataSource": "content-model-snapshot","intervals": "1901-01-01T00:00:00+00:00/2101-01-01T00:00:00+00:00","aggregations": [{"name": "count","type": "count"}],"dimensions": [{"fieldName": "channel","aliasName": "channel"}, {"fieldName": "identifier","aliasName": "identifier","type": "Extraction","outputType": "STRING","extractionFn": [{"type": "javascript","fn": "function(str){return str == null ? null: str.split(\".\")[0]}"}]}, {"fieldName": "name","aliasName": "name"}, {"fieldName": "createdFor","aliasName": "createdFor"}, {"fieldName": "createdOn","aliasName": "createdOn"}, {"fieldName": "lastUpdatedOn","aliasName": "lastUpdatedOn"}, {"fieldName": "board","aliasName": "board"}, {"fieldName": "medium","aliasName": "medium"}, {"fieldName": "gradeLevel","aliasName": "gradeLevel"}, {"fieldName": "subject","aliasName": "subject"}, {"fieldName": "status","aliasName": "status"}],"filters": [{"type": "equals","dimension": "contentType","value": "TextBook"}, {"type": "equals","dimension": "channel","value": "01306475770753843226"}, {"type": "in","dimension": "status","values": ["Live", "Draft", "Review"]}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"store": "local","format": "csv","key": "druid-reports/","filePath": "druid-reports/","container": "test-container","folderPrefix": ["slug", "reportName"]},"output": [{"to": "console","params": {"printEvent": false}}],"parallelization": 8,"appName": "VDN Metrics Job","deviceMapping": false}""".stripMargin
-    implicit val jobConfig = JSONUtils.deserialize[JobConfig](config)
 
-    SourcingMetrics.execute()
+    SourcingSummaryReport.execute()
 
-    val chapterReport = sqlContext.sparkSession.read
-      .option("header","true")
-      .csv("sourcing/Unknown/FolderLevel.csv")
-    chapterReport.first().getString(0) should be("AP") //Assertion for board
-    chapterReport.first().getString(1) should be("English") //Assertion for medium
-    chapterReport.first().getString(2) should be("Class 8") //Assertion for grade
-    chapterReport.first().getString(3) should be("Mathematics") //Assertion for subject
-    chapterReport.first().getString(4) should be("Kayal_Book") //Assertion for textbook name
-    chapterReport.first().getString(5) should be("Test_TextBook_name_8636893549") //Assertion for chaptername
+    val report = sqlContext.sparkSession.read
+      .option("header", "false")
+      .json("sourcing/SourcingSummaryReport.json")
 
-    val textbookReport = sqlContext.sparkSession.read
-      .option("header","true")
-      .csv("sourcing/Unknown/CollectionLevel.csv")
-    textbookReport.first().getString(0) should be("AP") //Assertion for board
-    textbookReport.first().getString(1) should be("English") //Assertion for medium
-    textbookReport.first().getString(2) should be("Class 8") //Assertion for grade
-    textbookReport.first().getString(3) should be("Mathematics") //Assertion for subject
-    textbookReport.first().getString(4) should be("Kayal_Book") //Assertion for textbook name
-    textbookReport.first().getString(5) should be("1") //Assertion for total number of chapters in textbook
-
+    report.first().getString(0) should be("0124698765480987654")
+    report.first().getString(1) should be("Practise Question Set")
+    report.first().getLong(3) should be(2L)
+    report.first().getString(4) should be("Individual")
   }
 
-  ignore should "generate hierarchy report" in {
-    implicit val sqlContext = new SQLContext(sc)
-    import sqlContext.implicits._
+  it should "get correct userType for users" in {
+    implicit val sc = spark.sparkContext
+    implicit val mockFc = mock[FrameworkContext]
+    val config = s"""{"search": {"type": "none"},"model": "org.ekstep.analytics.job.report.SourcingReports","modelParams": {"tables": {"programTable": "program", "nominationTable": "nomination"},"druidIngestionUrl":"https://httpbin.org/post","specPath":"absolutePath","dbName":"postgres","druidQuery": {"queryType": "groupBy","dataSource": "vdn-content-model-snapshot","intervals": "1901-01-01T00:00:00+00:00/2101-01-01T00:00:00+00:00","aggregations": [{"name": "count","type": "count"}],"dimensions": [{"fieldName": "primaryCategory","aliasName": "primaryCategory"},{"fieldName": "createdBy","aliasName": "createdBy"}],  "filters": [{"type": "equals","dimension": "objectType","value": "Content"}, {"type": "equals","dimension": "sampleContent","value": "false"}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"reportConfig": {"id": "funnel_report","metrics": [],"labels": {"reportDate": "Report generation date","visitors": "No. of users opening the project","projectName": "Project Name","initiatedNominations": "No. of initiated nominations","rejectedNominations": "No. of rejected nominations","pendingNominations": "No. of nominations pending review","acceptedNominations": "No. of accepted nominations to the project","noOfContributors": "No. of contributors to the project","noOfContributions": "No. of contributions to the project","pendingContributions": "No. of contributions pending review","approvedContributions": "No. of approved contributions"},"output": [{"type": "csv","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}, {"type": "json","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}]},"store": "azure","format": "csv","key": "druid-reports/","filePath": "druid-reports/","container": "reportPostContainer","folderPrefix": ["slug", "reportName"]},"sparkCassandraConnectionHost": "sunbirdPlatformCassandraHost","druidConfig": {"queryType": "timeseries","dataSource": "telemetry-events-syncts","intervals": "startdate/enddate","aggregations": [{"name": "visitors","type": "count","fieldName": "actor_id"}],"filters": [{"type": "equals","dimension": "context_cdata_id","value": "program_id"}, {"type": "equals","dimension": "edata_pageid","value": "contribution_project_contributions"}, {"type": "equals","dimension": "context_pdata_pid","value": "creation-portal.programs"}, {"type": "equals","dimension": "context_cdata_type","value": "project"}, {"type": "equals","dimension": "context_env","value": "creation-portal"}, {"type": "equals","dimension": "eid","value": "IMPRESSION"}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"output": [{"to": "console","params": {"printEvent": false}}],"parallelization": 8,"appName": "Funnel Report Job","deviceMapping": false}""".stripMargin
+    implicit val jobConfig = JSONUtils.deserialize[JobConfig](config)
+    insertData()
+    //mocking for DruidDataFetcher
+    import scala.concurrent.ExecutionContext.Implicits.global
+    val json: String =
+      """
+        |{
+        |    "primaryCategory": "Practise Question Set",
+        |    "createdBy": "0124698765480987654",
+        |    "count": 2.0
+        |  }
+      """.stripMargin
 
-    val config = """{"search": {"type": "none"},"druidConfig": {"queryType": "groupBy","dataSource": "content-model-snapshot","intervals": "1901-01-01T00:00:00+00:00/2101-01-01T00:00:00+00:00","aggregations": [{"name": "count","type": "count"}],"dimensions": [{"fieldName": "channel","aliasName": "channel"}, {"fieldName": "identifier","aliasName": "identifier","type": "Extraction","outputType": "STRING","extractionFn": [{"type": "javascript","fn": "function(str){return str == null ? null: str.split(\".\")[0]}"}]}, {"fieldName": "name","aliasName": "name"}, {"fieldName": "createdFor","aliasName": "createdFor"}, {"fieldName": "createdOn","aliasName": "createdOn"}, {"fieldName": "lastUpdatedOn","aliasName": "lastUpdatedOn"}, {"fieldName": "board","aliasName": "board"}, {"fieldName": "medium","aliasName": "medium"}, {"fieldName": "gradeLevel","aliasName": "gradeLevel"}, {"fieldName": "subject","aliasName": "subject"}, {"fieldName": "status","aliasName": "status"}],"filters": [{"type": "equals","dimension": "contentType","value": "TextBook"}, {"type": "equals","dimension": "channel","value": "01306475770753843226"}, {"type": "in","dimension": "status","values": ["Live", "Draft", "Review"]}],"postAggregation": [],"descending": "false","limitSpec": {"type": "default","limit": 1000000,"columns": [{"dimension": "count","direction": "descending"}]}},"model": "org.ekstep.analytics.job.report.VDNMetricsJob","modelParams": {"reportConfig": {"id": "vdn_report","metrics": [],"labels": {"date": "Date","name": "Textbook Name","medium": "Medium","gradeLevel": "Grade","subject": "Subject","board": "Board","grade": "Grade","chapters": "Chapter Name","totalChapters": "Total number of chapters (first level sections of ToC)","status": "Textbook Status"},"output": [{"type": "csv","dims": ["identifier", "channel", "name"],"fileParameters": ["id", "dims"]}]},"store": "local","format": "csv","key": "druid-reports/","filePath": "druid-reports/","container": "test-container","folderPrefix": ["slug", "reportName"]},"output": [{"to": "console","params": {"printEvent": false}}],"parallelization": 8,"appName": "VDN Metrics Job","deviceMapping": false}""".stripMargin
-    val encoders = Encoders.product[ContentHierarchy]
-    val data = spark.read.format("org.apache.spark.sql.cassandra").options(Map("table" -> "content_hierarchy", "keyspace" -> sunbirdHierarchyStore)).load()
-      .as[ContentHierarchy](encoders).first()
-    val hierarchy = JSONUtils.deserialize[TextbookHierarchy](data.hierarchy)
-    val report = SourcingMetrics.generateReport(List(hierarchy),List(), List(),hierarchy,List(),List("","0"))
-    val df = report._1.toDF().withColumn("slug",lit("test-slug")).withColumn("reportName",lit("TextbookReport"))
-    val configMap = JSONUtils.deserialize[Map[String,AnyRef]](config)
-    val reportConfig = configMap("modelParams").asInstanceOf[Map[String, AnyRef]]("reportConfig").asInstanceOf[Map[String, AnyRef]]
-    SourcingMetrics.saveReportToBlob(df,JSONUtils.serialize(reportConfig),StorageConfig("local","test","Textbook",Option(""),Option("")),"TextbookReport", "sourcing")
-    val level1identifiers = List("do_1130548235422269441989")
-    val contentTypes = List("Resource","TextBook")
+    val doc: Json = parse(json).getOrElse(Json.Null)
+    val results = List(DruidResult.apply(Some(ZonedDateTime.of(2020, 1, 23, 17, 10, 3, 0, ZoneOffset.UTC)), doc))
+    val druidResponse = DruidResponseTimeseriesImpl.apply(results, QueryType.GroupBy)
 
-    report._1.length should be (1)
-    report._1.map(f => {
-      level1identifiers.contains(f.l1identifier) should be (true)
-      f.channel should be ("channel-01")
-      f.name should be ("KP Integration Test Collection Content")
-      f.chapters should be ("Test_TextBook_name_8636893549")
-    })
+    implicit val mockDruidConfig = DruidConfig.DefaultConfig
+    val mockDruidClient = mock[DruidClient]
+    (mockDruidClient.doQuery[DruidResponse](_: DruidQuery)(_: DruidConfig)).expects(*, mockDruidConfig).returns(Future(druidResponse)).anyNumberOfTimes()
+    (mockFc.getDruidRollUpClient _).expects().returns(mockDruidClient).anyNumberOfTimes()
 
-    report._2.length should be (2)
-    report._2.map(f => {
-      f.contentType should not be("TextbookUnit")
-      level1identifiers.contains(f.l1identifier) should be (true)
-      f.identifier should be ("KP_FT_1593606389382")
-    })
-    report._2.map(f=>f.contentType) should equal(contentTypes)
+    val userDf = SourcingSummaryReport.getUserDetails()
+    userDf.select("osid").first().getString(0) should be("0124698765480987654")
+    userDf.select("user_type").first().getString(0) should be("Organization")
   }
 
 }
