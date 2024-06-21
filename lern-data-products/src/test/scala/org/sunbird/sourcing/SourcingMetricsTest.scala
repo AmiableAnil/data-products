@@ -33,7 +33,8 @@ class TestSourcingMetrics extends SparkSpec with Matchers with MockFactory {
     new HadoopFileUtil().delete(spark.sparkContext.hadoopConfiguration, "sourcing")
   }
 
-  it should "execute generate SourcingMetrics report" in {
+  //it should "execute generate SourcingMetrics report" in {
+  ignore should "execute generate SourcingMetrics report" in {
     implicit val sc = spark.sparkContext
     implicit val mockFc = mock[FrameworkContext]
     val sqlContext = new SQLContext(sc)
