@@ -66,7 +66,6 @@ object SourcingMetrics extends IJob with BaseReportsJob {
     val textbookReportData = getTextbookInfo(textbooks)
     val textbookReports = textbookReportData._1.toDF()
     JobLogger.log(s"SourcingMetrics: execute textbookReports ${textbookReports.columns}",None, Level.INFO)
-    textbookReports.show(5, false)
     val tenantInfo = getTenantInfo(RestUtil).toDF()
     JobLogger.log(s"$jobName: Generated report metrics - textbook: ${textbookReportData._1.length}, contents: ${textbookReportData._2.length}", None, INFO)
     val report = textbookReports.join(tenantInfo,

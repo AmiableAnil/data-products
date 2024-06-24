@@ -130,7 +130,6 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
       }
     }
     JobLogger.log("ETBMetricsModel: postProcess ends showing the events data", None, INFO)
-    events.toDF().show(5, false)
     events
   }
 
@@ -251,7 +250,6 @@ object ETBMetricsModel extends IBatchModelTemplate[Empty,Empty,FinalOutput,Final
 
     val scansDF = scansCount.selectExpr("Date", "dialcodes", "cast(scans as int) scans")
     JobLogger.log("ETBMetricsModel: scansDF records", None, INFO)
-    scansDF.show(5, false)
     scansDF.groupBy(scansDF("dialcodes")).sum("scans")
   }
 

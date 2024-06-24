@@ -41,7 +41,6 @@ object TextBookUtils {
     val request = JSONUtils.serialize(config.get("druidConfig").get)
     val druidQuery = JSONUtils.deserialize[DruidQueryModel](request)
     val druidResponse = DruidDataFetcher.getDruidData(druidQuery, true)
-    druidResponse.toDF().show(5, false)
     val result = druidResponse.map(f => {
       JSONUtils.deserialize[TextbookData](f)
     })
@@ -98,7 +97,6 @@ object TextBookUtils {
     "storageKeyConfig"-> config("storageKeyConfig"), "storageSecretConfig" -> config("storageSecretConfig"))
     val scansDf = sc.parallelize(dialcodeScans).toDF().dropDuplicates("dialcodes")
     JobLogger.log("TextBookUtils: generateWeeklyScanReport check scansDf columns: "+scansDf.columns.toSeq, None, INFO)
-    scansDf.show(5,false)
     reportConfig.output.foreach { f =>
       CourseUtils.postDataToBlob(scansDf,f,conf)
     }
