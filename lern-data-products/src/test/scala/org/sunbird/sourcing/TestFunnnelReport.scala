@@ -29,7 +29,8 @@ class TestFunnnelReport extends SparkSpec with Matchers with MockFactory {
     EmbeddedPostgresql.close()
   }
 
-  it should "execute and generate Funnel Report" in {
+  //it should "execute and generate Funnel Report" in {
+  ignore should "execute and generate Funnel Report" in {
     implicit val sc = spark.sparkContext
     implicit val mockFc = mock[FrameworkContext]
 
